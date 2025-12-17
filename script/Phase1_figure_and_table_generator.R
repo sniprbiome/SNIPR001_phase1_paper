@@ -6,7 +6,6 @@ if(!c("dplyr") %in% installed.packages()) {install.packages("dplyr")}
 if(!c("tidyr") %in% installed.packages()) {install.packages("tidyr")}
 if(!c("openxlsx") %in% installed.packages()) {install.packages("openxlsx")}
 if(!c("ggnewscale") %in% installed.packages()) {install.packages("ggnewscale")}
-if(!c("rstudioapi") %in% installed.packages()) {install.packages("rstudioapi")}
 
 
 library(ggplot2)
@@ -17,7 +16,6 @@ library(dplyr)
 library(tidyr)
 library(openxlsx)
 library(ggnewscale)
-
 
 
 #a function to reverse the output of table to the input for table
@@ -34,36 +32,14 @@ geomean <- function(x){
 }
 
 #A function to easily set axis text to scientific notation
-to_tenth_power_labels <- function(x_labels){
-  return(parse(text=paste0("10^",x_labels)))
-}
-
-#a function to avoind the errors around rounding floating point errors,
-#e.g. round(0.25)=0.2
-true_round <- function(number, digits) {
-  posneg <- sign(number)
-  number <- abs(number) * 10^digits
-  number <- number + 0.5 + sqrt(.Machine$double.eps)
-  number <- trunc(number)
-  number <- number / 10 ^ digits
-  number * posneg
+to_tenth_power_labels <- function(x_labels) {
+  as.expression(lapply(x_labels, function(i) bquote(10^.(i))))
 }
 
 
-
-#A function to dodge geom_pointrange figures in a way that's a bit more intelligent
-#in that it dodges hard when the bulky points overlaps, dodges less when the points
-#and a whisker overlap, dodges even less when only whiskers overlap, and doesn't
-#dodge at all when there's no graphical overlap in whiskers
-#this is to make the figures more compact
-
-#point data is a dataframe with 4 columns that are ordered as
-#1 group for dodging, 2 the position of the point, 3 the upper whisker and 4 the lower whisker
-#close_dodge is the extent of dodge for point-to-point interaction dodges
-#whisker_point_dodge is the extent of dodge for two points that interact with a whisker and a point
-#and whisker_dodge is the extent of dodge required if only whiskers interact
+#let's try to figure out a way to more intelligently dodge pointranges that are sequential
 intelligently_dodge_one_timepoint <- function(point_data,close_dodge,whisker_point_dodge,whisker_dodge){
-  #we standardize names of the input
+  
   colnames(point_data) <- c('group','mean','upper','lower')
   
   #we generate every combination worth testing
@@ -494,7 +470,7 @@ urine_SNIPR001_recovery_LLOQ <- 5*10^0
 ########################################
 #first we'll get the reasons for screening failure
 #we'll create the summary stuff
-reasons_for_screen_fail <- openxlsx::read.xlsx(paste0(data_folder,'reasons_for_screen_failure.xlsx'))
+reasons_for_screen_fail <- openxlsx::read.xlsx(paste0(data_folder,'reasons_for_screen_failiure.xlsx'))
 reasons_for_screen_fail <- reasons_for_screen_fail[,c("Subject.#","Status","Standardized.reason")]
 
 #we'll get the categories we used for the paper
@@ -566,7 +542,6 @@ if(max(table(unique_subjects_reasons_ID_combos[["Subject.#"]]))!=1){
 output_table <- table(unique_subjects_reasons_ID_combos[unique_subjects_reasons_ID_combos[["Status"]]!='Screen Pass',"Generalized_reason"])
 output_table <- as.data.frame(output_table)
 colnames(output_table) <- c('Categorized reason for failure','Number of failures')
-output_table <- output_table[order(output_table[["Number of failures"]],decreasing = T),]
 write.xlsx(x = output_table,file = paste0(tables_folder,'Figure_1_categorized_reasons_for_failiure.xlsx'))
 
 
@@ -581,23 +556,15 @@ relevant_demographics <- openxlsx::read.xlsx(xlsxFile = paste0(data_folder,'rele
 #first for the individual cohorts
 demographics_data_distribution_cohort <- relevant_demographics %>% group_by(Actual.Treatment.for.Period) %>% summarise('n_male'=sum(Sex=="M"),
                                                                                                                           'n_female'=sum(Sex=="F"),
-                                                                                                                          'mean_age_sd'=paste0(format(true_round(mean(Age),digits = 1)),'+-',format(true_round(sd(Age),digits = 1))),
-                                                                                                                          'mean_BMI_sd'=paste0(format(true_round(mean(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1)),'+-',format(true_round(sd(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1))))
-
-
-
-temp <- relevant_demographics %>% group_by(Actual.Treatment.for.Period) %>% summarise('n_male'=sum(Sex=="M"),
-                                                                              'n_female'=sum(Sex=="F"),
-                                                                              'mean_age_1_dig'=true_round(mean(Age),digits = 1),
-                                                                              'mean_age_2_dig'=true_round(mean(Age),digits = 2),
-                                                                              'mean_age_inf_dig'=mean(Age))
+                                                                                                                          'mean_age_sd'=paste0(format(round(mean(Age),digits = 1)),'+-',format(round(sd(Age),digits = 1))),
+                                                                                                                          'mean_BI_sd'=paste0(format(round(mean(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1)),'+-',format(round(sd(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1))))
 
 
 #then the study as a whole
 demographics_data_distribution_total <- relevant_demographics %>% summarise('n_male'=sum(Sex=="M"),
                                                                             'n_female'=sum(Sex=="F"),
-                                                                            'mean_age_sd'=paste0(format(true_round(mean(Age),digits = 1)),'+-',format(true_round(sd(Age),digits = 1))),
-                                                                            'mean_BI_sd'=paste0(format(true_round(mean(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1)),'+-',format(true_round(sd(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1))))
+                                                                            'mean_age_sd'=paste0(format(round(mean(Age),digits = 1)),'+-',format(round(sd(Age),digits = 1))),
+                                                                            'mean_BMI_sd'=paste0(format(round(mean(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1)),'+-',format(round(sd(`Body.Mass.Index.at.Baseline.(kg/m2)`),digits = 1))))
 
 
 #and we gather ethnic information
@@ -623,11 +590,23 @@ race_distribution <- rbind(race_distribution_cohort,race_distribution_total)
 #we'll collapse the data together
 age_sex_BMI_demographics_data <- rbind(demographics_data_distribution_cohort,unlist(c('all',unname(demographics_data_distribution_total))))
 
+#we'll standardize the formats
+age_sex_BMI_demographics_data <- as.data.frame(age_sex_BMI_demographics_data)
+rownames(age_sex_BMI_demographics_data) <- age_sex_BMI_demographics_data[[1]]
+age_sex_BMI_demographics_data <- age_sex_BMI_demographics_data[,-1]
+
+race_distribution <- as.data.frame(race_distribution)
+rownames(race_distribution) <- race_distribution[[1]]
+race_distribution <- race_distribution[,-1]
+
+ethnicity_distribution <- as.data.frame(ethnicity_distribution)
+rownames(ethnicity_distribution) <- ethnicity_distribution[[1]]
+ethnicity_distribution <- ethnicity_distribution[,-1]
+
 
 #we add the race and ethnicity info to the other demographics data
-age_sex_BMI_demographics_data <- cbind(age_sex_BMI_demographics_data,
-                                       race_distribution[,seq(2,ncol(ethnicity_distribution))],
-                                       ethnicity_distribution[,seq(2,ncol(ethnicity_distribution))])
+age_sex_BMI_demographics_data <- cbind(age_sex_BMI_demographics_data,race_distribution,ethnicity_distribution)
+age_sex_BMI_demographics_data <- cbind('Treatment'=rownames(age_sex_BMI_demographics_data),age_sex_BMI_demographics_data)
 
 
 #we'll read the plaquing susceptibility data
@@ -635,6 +614,7 @@ all_quantitative_culture_data <- read.xlsx(xlsxFile =  paste0(data_folder,'quant
 
 #we'll get all the culturing data from screening
 screening_plaquing_data <- all_quantitative_culture_data[grepl('Number of',all_quantitative_culture_data[,"Parameter"]) & all_quantitative_culture_data[["Visit_name"]]=='Screening',]
+
 
 #we'll get the plaquing data seperated into cohorts
 plaquing_data_cohorts <- screening_plaquing_data %>% group_by(Subject.ID) %>% mutate('n_norm'=Value/sum(Value)) %>% group_by(Treatment,Parameter) %>% summarise('mean'=mean(n_norm*10),'sd'=sd(n_norm*10))
@@ -646,7 +626,7 @@ plaquing_data_all <- cbind('Treatment'='All',plaquing_data_all)
 
 #we'll combine the tables
 summary_plaquing_data <- rbind(plaquing_data_cohorts,plaquing_data_all)
-summary_plaquing_data <- cbind(summary_plaquing_data,'table_text'=paste0(true_round(summary_plaquing_data[["mean"]],2),'±',true_round(summary_plaquing_data[["sd"]],2)))
+summary_plaquing_data <- cbind(summary_plaquing_data,'table_text'=paste0(round(summary_plaquing_data[["mean"]],2),'±',round(summary_plaquing_data[["sd"]],2)))
 
 #we reshape and output
 summary_plaquing_data <- acast(data = summary_plaquing_data,formula = Parameter~Treatment,value.var = "table_text")
@@ -659,14 +639,12 @@ stool_titers_all <- c('Treatment'='All',stool_titers_all)
 
 stool_titers_screening <- rbind(stool_titers_grouped,stool_titers_all)
 
-
-#we save the e coli titer summary data
 write.xlsx(x = stool_titers_screening,file = paste0(tables_folder,'General_info_ecoli_titers_at_screening.xlsx'))
 
-#we save the base demograpics around race, BMI and 
 write.xlsx(x = age_sex_BMI_demographics_data,file = paste0(tables_folder,'Table_1_demographics_table_info_for.xlsx'))
 
 #we save the summary plaquing data
+summary_plaquing_data <- cbind('Morphology'=rownames(summary_plaquing_data),summary_plaquing_data)
 write.xlsx(x = summary_plaquing_data,file = paste0(tables_folder,'Table_1_summary_plaquing_data.xlsx'))
 
 
@@ -682,12 +660,25 @@ adverse_events_data <- openxlsx::read.xlsx(paste0(data_folder,'adverse_events_da
 #we intentionally do not group by day as well, since some individuals experience
 #persistent symptoms i.e. syptoms that persist over multiple days.
 #These should be counted as a single persistent/recourring event
-adverse_events_export <- adverse_events_data %>% filter(Solicited.AE=='Y') %>% group_by(Actual.treatment,Body.System.or.Organ.Class,Dictionary.Derived.Term) %>% summarise('n_events'=sum(Solicited.AE=='Y')) %>% arrange(Actual.treatment)
+adverse_events_export <- adverse_events_data %>% group_by(Actual.treatment,Solicited.AE,Analysis.Toxicity.Grade,Body.System.or.Organ.Class,Dictionary.Derived.Term) %>% summarise('n_events'=n()) %>% arrange(Actual.treatment,Solicited.AE)
 
 write.xlsx(x = adverse_events_export,file = paste0(tables_folder,'Table_2_adverse_events_summary_for.xlsx'))
 
+#we'll test if the number of people who experienced adverse events in the treatment groups was higher than the placebo group
+adverse_events_data[['Treatment']] <- c('Treatment','Placebo')[as.numeric(adverse_events_data[["Actual.treatment"]]=='Placebo')+1]
 
+adverse_events_table <- adverse_events_data %>% group_by(Treatment) %>% summarise('n'=length(unique(Subject.identifier.in.study)))
 
+#we'll get the number of people who haven't experienced any adverse events
+participant_info <- openxlsx::read.xlsx(xlsxFile = paste0(data_folder,'relevant_demographics.xlsx'))
+participant_info[['Treatment']] <- c('Treated','Placebo')[as.numeric(participant_info[["Actual.Treatment.for.Period"]]=='Placebo')+1]
+all_participants <- participant_info %>% group_by(Treatment) %>% summarise('n'=length(unique(Subject.Identifier.for.the.Study)))
+
+#we construct the confusion matrix and run a one-sided fisher's test
+confusion_matrix <- data.frame('experienced_AE'=adverse_events_table[["n"]],'did_not_experience_AE'=all_participants[["n"]]-adverse_events_table[["n"]])
+fisher.test(confusion_matrix,alternative = 'less')
+
+#and we'll calculate the number of people who haven't experienced any symptoms
 ########################################################
 #Figure 3 - Recovery from blood, urine and stool figure#
 ########################################################
@@ -1139,7 +1130,9 @@ openxlsx::write.xlsx(x = difference_data,file = paste0(tables_folder,'Supplement
 adverse_events_data <- openxlsx::read.xlsx(paste0(data_folder,'adverse_events_data.xlsx'))
 
 #we select relevant columns and get the number of each
-all_adverse_events <- adverse_events_data %>%  group_by(Actual.treatment,Solicited.AE,Analysis.Toxicity.Grade,Causality,Dictionary.Derived.Term,Outcome.of.Adverse.Event) %>% reframe('n'=length(Dictionary.Derived.Term)) %>% arrange(Actual.treatment,Solicited.AE,Causality,Analysis.Toxicity.Grade,Dictionary.Derived.Term)
+all_adverse_events <- adverse_events_data %>%  group_by(Actual.treatment,Solicited.AE,Analysis.Toxicity.Grade,Causality,Dictionary.Derived.Term,Outcome.of.Adverse.Event,Cohort) %>% 
+  reframe('n'=length(Dictionary.Derived.Term)) %>% 
+  arrange(Actual.treatment,Solicited.AE,Causality,Analysis.Toxicity.Grade,Dictionary.Derived.Term)
 
 #we reformat things slightly to spell things out for the article
 all_adverse_events[["Actual.treatment"]] <- c("Cohort 1 SNIPR001"='10^8 BID',"Cohort 2 SNIPR001"='10^10 BID',"Cohort 3 SNIPR001"='10^12 BID','Placebo'='Placebo')[all_adverse_events[["Actual.treatment"]]]
@@ -1189,8 +1182,8 @@ for(day in days){
 }
 
 
-ast_alt_comparison_data[["pval"]] <- true_round(ast_alt_comparison_data[["pval"]],2)
-ast_alt_comparison_data[["cliff_delta"]] <- true_round(ast_alt_comparison_data[["cliff_delta"]],2)
+ast_alt_comparison_data[["pval"]] <- round(ast_alt_comparison_data[["pval"]],2)
+ast_alt_comparison_data[["cliff_delta"]] <- round(ast_alt_comparison_data[["cliff_delta"]],2)
 
 openxlsx::write.xlsx(x = ast_alt_comparison_data,file = paste0(tables_folder,'Supplementary_table_5_ast_alt_ratio_pval_day.xlsx'))
 
@@ -1245,6 +1238,7 @@ relevant_contrasts[['FDR_adjusted_pval']] <- p.adjust(relevant_contrasts[['one_w
 
 #we'll export
 openxlsx::write.xlsx(x = relevant_contrasts[,c("contrast","estimate","SE","one_way_pval_greater","FDR_adjusted_pval")],file = paste0(tables_folder,'Supplementary_table_4_abx_susceptibility_regression_for_supplementary.xlsx'))
+
 
 
 
