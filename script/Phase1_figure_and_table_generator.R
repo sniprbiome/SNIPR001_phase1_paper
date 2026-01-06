@@ -664,18 +664,32 @@ adverse_events_export <- adverse_events_data %>% group_by(Actual.treatment,Solic
 
 write.xlsx(x = adverse_events_export,file = paste0(tables_folder,'Table_2_adverse_events_summary_for.xlsx'))
 
-#we'll test if the number of people who experienced adverse events in the treatment groups was higher than the placebo group
-adverse_events_data[['Treatment']] <- c('Treatment','Placebo')[as.numeric(adverse_events_data[["Actual.treatment"]]=='Placebo')+1]
 
-adverse_events_table <- adverse_events_data %>% group_by(Treatment) %>% summarise('n'=length(unique(Subject.identifier.in.study)))
+#################################################################################
+#Fisher's exact test on the number of participants who experience AEs days 1-187#
+#################################################################################
+#we read a table of the number of participants who experienced adverse events at any point in the trial
+participants_with_adverse_events <- openxlsx::read.xlsx(paste0(data_folder,'n_participants_with_adverse_events_full_study.xlsx'),rowNames = T)
 
-#we'll get the number of people who haven't experienced any adverse events
-participant_info <- openxlsx::read.xlsx(xlsxFile = paste0(data_folder,'relevant_demographics.xlsx'))
-participant_info[['Treatment']] <- c('Treated','Placebo')[as.numeric(participant_info[["Actual.Treatment.for.Period"]]=='Placebo')+1]
-all_participants <- participant_info %>% group_by(Treatment) %>% summarise('n'=length(unique(Subject.Identifier.for.the.Study)))
+#we sum up the number of SNIPR001-receiving participants who have adverse events
+#and the number of placebo-recipients who have adverse events 
+SNIPR001_indeces <- grepl('SNIPR001',colnames(participants_with_adverse_events))
+n_SNIPR001_with_adverse_events <- sum(participants_with_adverse_events["Number of subjects with adverse events",SNIPR001_indeces])
+n_placebo_with_adverse_events <- sum(participants_with_adverse_events["Number of subjects with adverse events",!SNIPR001_indeces])
+
+#we'll get the total number of participants in SNIPR001/placebo groups
+n_SNIPR001_participants <- sum(participants_with_adverse_events["Number of subjects total",SNIPR001_indeces])
+n_placebo_participants <- sum(participants_with_adverse_events["Number of subjects total",!SNIPR001_indeces])
+
+
+#we get the number of patients who experienced symptoms based on their treatment/placebo status
+number_of_participants_with_symptoms <- c('Placebo'=n_placebo_with_adverse_events,'SNIPR001'=n_SNIPR001_with_adverse_events)
+number_of_participants_without_symptoms <- c('Placebo'=n_placebo_participants-n_placebo_with_adverse_events,'SNIPR001'=n_SNIPR001_participants-n_SNIPR001_with_adverse_events)
+
+#we construct the confusion matrix
+confusion_matrix <- cbind(number_of_participants_with_symptoms,number_of_participants_without_symptoms)
 
 #we construct the confusion matrix and run a one-sided fisher's test
-confusion_matrix <- data.frame('experienced_AE'=adverse_events_table[["n"]],'did_not_experience_AE'=all_participants[["n"]]-adverse_events_table[["n"]])
 fisher.test(confusion_matrix,alternative = 'less')
 
 #and we'll calculate the number of people who haven't experienced any symptoms
@@ -736,6 +750,17 @@ figure <- cowplot::plot_grid(plotlist = list(top_plot,bottom_plots),align = 'hv'
 #then we save the figure of all the recovery figure
 ggsave(plot = figure,filename = paste0(figures_folder,'Figure_3_recovery_illustration.pdf'),width = 8,height = 6)
 
+#we'll also get the log-transformed means and sds for each group at each day for relevant measured sites
+
+additional_recovery_summary_stats <- quant_ecoli_dat %>% mutate('logged_value'=log(Value+1,10)) %>% 
+  filter(Parameter%in%c('Stool Average titer','Urine Average titer','Plasma Average titer')) %>% 
+  group_by(Parameter,Visit_name,Treatment) %>% 
+  summarise('log10_geometric_mean'=mean(logged_value,na.rm=T),'log10_GSD'=sd(logged_value,na.rm=T)) %>% 
+  mutate('geomean'=10^log10_geometric_mean,'geosd'=10^log10_GSD)
+
+additional_recovery_summary_stats <- pivot_wider(data = additional_recovery_summary_stats,names_from = "Parameter",values_from = c("log10_geometric_mean","log10_GSD","geomean","geosd"))
+#and we'll save this excel sheet
+openxlsx::write.xlsx(x = additional_recovery_summary_stats,file = paste0(tables_folder,'summary_recoveries_all_times_all_measures_sites.xlsx'))
 
 #########################################
 #Figure 2A E. coli recovery by LS means#
